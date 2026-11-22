@@ -1,0 +1,52 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Скачать репозиторий
+        uses: actions/checkout@v4
+
+      - name: Найти проект (рядом лежит или внутри axel-project.zip)
+        run: |
+          if [ -f settings.gradle ]; then
+            D=.
+          elif [ -f axel-project.zip ]; then
+            mkdir -p _p
+            unzip -q axel-project.zip -d _p
+            F=$(find _p -name settings.gradle | head -1)
+            if [ -z "$F" ]; then echo "В zip нет settings.gradle"; exit 1; fi
+            D=$(dirname "$F")
+          else
+            echo "Не нашёл ни проект, ни axel-project.zip в репозитории"; exit 1
+          fi
+          echo "PROJECT_DIR=$D" >> "$GITHUB_ENV"
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.9
+
+      - name: Собрать APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Выложить APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Axel-APK
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
